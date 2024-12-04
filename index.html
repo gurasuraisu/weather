@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather Widget</title>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            color: #f9f9f9;
+            background-color: transparent;
+        }
+        .weather-widget {
+            font-size: 1.5rem;
+            padding: 20px;
+            border-radius: 30px;
+            margin: 20px auto;
+            text-align: center;
+            max-width: 800px;
+            transition: background-color 0.5s;
+        }
+        .weather-icon {
+            font-size: 5rem;
+            display: block;
+            margin: 0 auto 10px;
+        }
+        .weather-widget h2 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+        .location-text {
+            font-size: 1rem;
+            margin-bottom: 10px;
+            font-weight: normal;
+            color: #e0e0e0;
+        }
+        .additional-info {
+            font-size: 1rem;
+            margin-top: 15px;
+        }
+        .forecast-container {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+        .forecast-day {
+            background-color: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            border-radius: 20px;
+            text-align: center;
+            flex: 1 1 18%;
+            margin: 5px;
+            box-sizing: border-box;
+            color: #f9f9f9;
+        }
+        .forecast-icon {
+            font-size: 2rem;
+        }
+        .forecast-day p {
+            margin: 5px 0;
+            color: #f9f9f9;
+        }
+        .forecast-day .day-name {
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+        .hourly-forecast {
+            margin-top: 30px;
+            text-align: left;
+        }
+        .hour {
+            display: flex;
+            justify-content: space-between;
+            padding: 7px 15px;
+            background-color: rgba(255, 255, 255, 0.1);
+            margin: 5px 0;
+            color: #f9f9f9;
+            border-radius: 5px;
+        }
+        .hour.first {
+            border-radius: 20px 20px 5px 5px;
+        }
+        .hour.last {
+            border-radius: 5px 5px 20px 20px;
+        }
+        @media (max-width: 600px) {
+            .forecast-day {
+                flex: 1 1 calc(50% - 10px);
+            }
+        }
+        @media (max-width: 400px) {
+            .forecast-day {
+                flex: 1 1 calc(100% - 10px);
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="weather-widget" id="weather">
+    <p>Loading weather data...</p>
+</div>
+
+<script>
+    // All weather codes supported by Open-Meteo
+    const weatherConditions = {
+        0: { description: 'Clear Sky', icon: '☀️' },
+        1: { description: 'Mainly Clear', icon: '🌤️' },
+        2: { description: 'Partly Cloudy', icon: '⛅' },
+        3: { description: 'Overcast', icon: '☁️' },
+        45: { description: 'Fog', icon: '🌫️' },
+        48: { description: 'Depositing Rime Fog', icon: '🌫️' },
+        51: { description: 'Light Drizzle', icon: '🌦️' },
+        53: { description: 'Moderate Drizzle', icon: '🌦️' },
+        55: { description: 'Dense Drizzle', icon: '🌧️' },
+        56: { description: 'Light Freezing Drizzle', icon: '🌧️' },
+        57: { description: 'Dense Freezing Drizzle', icon: '🌧️' },
+        61: { description: 'Slight Rain', icon: '🌧️' },
+        63: { description: 'Moderate Rain', icon: '🌧️' },
+        65: { description: 'Heavy Rain', icon: '🌧️' },
+        66: { description: 'Light Freezing Rain', icon: '🌧️' },
+        67: { description: 'Heavy Freezing Rain', icon: '🌧️' },
+        71: { description: 'Slight Snow', icon: '🌨️' },
+        73: { description: 'Moderate Snow', icon: '❄️' },
+        75: { description: 'Heavy Snow', icon: '❄️' },
+        77: { description: 'Snow Grains', icon: '❄️' },
+        80: { description: 'Slight Showers', icon: '🌦️' },
+        81: { description: 'Moderate Showers', icon: '🌧️' },
+        82: { description: 'Violent Showers', icon: '⛈️' },
+        85: { description: 'Slight Snow Showers', icon: '🌨️' },
+        86: { description: 'Heavy Snow Showers', icon: '❄️' },
+        95: { description: 'Thunderstorm', icon: '⛈️' },
+        96: { description: 'Thunderstorm with Hail', icon: '⛈️' },
+        99: { description: 'Heavy Thunderstorm with Hail', icon: '🌩️' }
+    };
+
+    // Fetch weather data based on dynamic location
+    async function fetchLocationAndWeather() {
+        try {
+            const locationResponse = await fetch('https://ipapi.co/json/');
+            const locationData = await locationResponse.json();
+
+            const { latitude, longitude, city } = locationData;
+
+            const currentWeatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`;
+            const dailyForecastUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&daily=temperature_2m_max,weathercode&timezone=Europe/London`;
+            const hourlyForecastUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&hourly=temperature_2m,weathercode&timezone=Europe/London`;
+
+            const currentResponse = await fetch(currentWeatherUrl);
+            const dailyResponse = await fetch(dailyForecastUrl);
+            const hourlyResponse = await fetch(hourlyForecastUrl);
+
+            if (!currentResponse.ok || !dailyResponse.ok || !hourlyResponse.ok) {
+                throw new Error('Failed to fetch weather data');
+            }
+
+            const currentWeatherData = await currentResponse.json();
+            const dailyForecastData = await dailyResponse.json();
+            const hourlyForecastData = await hourlyResponse.json();
+
+            return {
+                city,
+                current: {
+                    temperature: currentWeatherData.current_weather.temperature,
+                    windSpeed: currentWeatherData.current_weather.windspeed,
+                    weatherCode: currentWeatherData.current_weather.weathercode
+                },
+                dailyForecast: dailyForecastData.daily,
+                hourlyForecast: hourlyForecastData.hourly
+            };
+        } catch (error) {
+            console.error('Error fetching location or weather data:', error);
+            return null;
+        }
+    }
+
+    function getDayOfWeek(dateString) {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', { weekday: 'long' });
+    }
+
+    function getHourString(dateString) {
+        const date = new Date(dateString);
+        return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    async function displayWeather() {
+        const weatherData = await fetchLocationAndWeather();
+
+        if (!weatherData) {
+            document.getElementById('weather').innerHTML = 'Failed to load weather data.';
+            return;
+        }
+
+        const { city, current, dailyForecast, hourlyForecast } = weatherData;
+        const weatherElement = document.getElementById('weather');
+        const currentWeather = weatherConditions[current.weatherCode] || { description: 'Unknown', icon: '❓' };
+
+        const currentTime = new Date();
+
+        const nextDayMidnight = new Date(currentTime);
+        nextDayMidnight.setHours(24, 0, 0, 0);
+
+        const validHourlyForecast = hourlyForecast.time
+            .map((time, index) => {
+                const forecastTime = new Date(time);
+                if (forecastTime > currentTime && forecastTime < nextDayMidnight) {
+                    return {
+                        time: time,
+                        temperature: hourlyForecast.temperature_2m[index],
+                        weatherCode: hourlyForecast.weathercode[index]
+                    };
+                }
+                return null;
+            })
+            .filter(Boolean);
+
+        // Determine background color based on the weather code
+        let backgroundColor;
+        const hour = new Date().getHours();
+        const isDaytime = hour >= 6 && hour <= 18;
+
+        if (isDaytime) {
+            switch (current.weatherCode) {
+                case 0: // Clear Sky
+                    backgroundColor = '#2C3539'; // Dark charcoal for clear sky
+                    break;
+                case 1: // Mainly Clear
+                    backgroundColor = '#3E474D'; // Darker slate gray for mainly clear
+                    break;
+                case 2: // Partly Cloudy
+                    backgroundColor = '#4E5A61'; // Darker grayish for partly cloudy
+                    break;
+                case 3: // Overcast
+                    backgroundColor = '#36454F'; // Darker cadet blue for overcast
+                    break;
+                case 45: // Fog
+                case 48:
+                    backgroundColor = '#556B2F'; // Darker olive drab for fog
+                    break;
+                case 51: // Light Drizzle
+                case 53:
+                case 55:
+                    backgroundColor = '#696969'; // Darker gray for drizzle
+                    break;
+                case 56: // Light Freezing Drizzle
+                case 57:
+                    backgroundColor = '#5C5C5C'; // Darker gray for freezing drizzle
+                    break;
+                case 61: // Rain
+                case 63:
+                case 65:
+                    backgroundColor = '#4F4F4F'; // Darker gray for rain
+                    break;
+                case 66: // Freezing Rain
+                case 67:
+                    backgroundColor = '#4B4B4B'; // Darker gray for freezing rain
+                    break;
+                case 71: // Snow
+                case 73:
+                case 75:
+                    backgroundColor = '#E0E0E0'; // Light gray for snow
+                    break;
+                case 77: // Snow Grains
+                    backgroundColor = '#E8E8E8'; // Slightly darker gray for snow grains
+                    break;
+                case 80: // Showers
+                case 81:
+                case 82:
+                    backgroundColor = '#606060'; // Darker gray for showers
+                    break;
+                case 85: // Snow Showers
+                case 86:
+                    backgroundColor = '#A9A9A9'; // Dark gray for snow showers
+                    break;
+                case 95: // Thunderstorm
+                    backgroundColor = '#B8860B'; // Dark goldenrod for thunderstorms
+                    break;
+                case 96: // Thunderstorm with Hail
+                case 99:
+                    backgroundColor = '#B5651D'; // Dark brown for thunderstorms with hail
+                    break;
+                default:
+                    backgroundColor = '#2F4F4F'; // Darker grayish-blue as default
+                    break;
+            }
+        } else {
+            // Nighttime conditions
+            backgroundColor = '#0C0C0C'; // Even darker color for night
+        }
+
+        // Update the weather widget
+        weatherElement.style.backgroundColor = backgroundColor;
+
+        weatherElement.innerHTML = `
+            <h2>${current.temperature}°C</h2>
+            <p class="location-text">${city}</p>
+            <span class="weather-icon">${currentWeather.icon}</span>
+            <p>${currentWeather.description}</p>
+            <p class="additional-info">Wind Speed: ${current.windSpeed} km/h</p>
+            <div class="hourly-forecast">
+                ${validHourlyForecast.map((hour, index) => {
+                    const hourClass = index === 0 ? 'hour first' : index === validHourlyForecast.length - 1 ? 'hour last' : 'hour';
+                    const hourString = getHourString(hour.time);
+                    const hourWeather = weatherConditions[hour.weatherCode] || { description: 'Unknown', icon: '❓' };
+
+                    return `
+                        <div class="${hourClass}">
+                            <span>${hourString}</span>
+                            <span>${hour.temperature}°C</span>
+                            <span>${hourWeather.icon}</span>
+                            <span>${hourWeather.description}</span>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+            <div class="forecast-container">
+                ${dailyForecast.time.slice(1, 6).map((date, index) => {
+                    const dayName = getDayOfWeek(date);
+                    const weatherCode = dailyForecast.weathercode[index + 1];
+                    const maxTemp = dailyForecast.temperature_2m_max[index + 1];
+                    const forecastWeather = weatherConditions[weatherCode] || { description: 'Unknown', icon: '❓' };
+
+                    return `
+                        <div class="forecast-day">
+                            <p class="day-name">${dayName}</p>
+                            <p class="forecast-icon">${forecastWeather.icon}</p>
+                            <p>${maxTemp}°C</p>
+                            <p>${forecastWeather.description}</p>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    }
+
+    displayWeather();
+</script>
+
+</body>
+</html>
